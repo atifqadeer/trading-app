@@ -4,238 +4,277 @@ declare(strict_types=1);
 
 namespace Auth0\Laravel\Auth;
 
-use Auth0\Laravel\Entities\CredentialEntityContract;
-use Auth0\Laravel\Guards\{AuthenticationGuard, AuthenticationGuardContract, AuthorizationGuard, AuthorizationGuardContract, GuardAbstract, GuardContract};
-use Illuminate\Contracts\Auth\Authenticatable;
-
-/**
- * @deprecated 7.8.0 Please migrate to using either Auth0\Laravel\Guards\AuthenticationGuard or Auth0\Laravel\Guards\AuthorizationGuard.
- *
- * @api
- */
-final class Guard extends GuardAbstract implements GuardContract
+final class Guard implements \Auth0\Laravel\Contract\Auth\Guard, \Illuminate\Contracts\Auth\Guard
 {
-    private ?AuthenticationGuardContract $authenticator = null;
-
-    private ?AuthorizationGuardContract $authorizer = null;
-
-    private ?int $credentialSource = null;
-
     /**
-     * @param null|int $source Credential source in which to search. Defaults to searching all sources.
+     * The user provider implementation.
      */
-    public function find(
-        ?int $source = null,
-    ): ?CredentialEntityContract {
-        $token = null;
-        $session = null;
+    private \Illuminate\Contracts\Auth\UserProvider $provider;
 
-        if ($this->isImpersonating()) {
-            return $this->getImposter();
-        }
+    /**
+     * The request instance.
+     */
+    private \Illuminate\Http\Request $request;
 
-        if (null === $source || self::SOURCE_TOKEN === $source) {
-            $token = $this->getAuthorizationGuard()->findToken();
-        }
-
-        if (null === $source && ! $token instanceof CredentialEntityContract || self::SOURCE_SESSION === $source) {
-            $session = $this->getAuthenticationGuard()->findSession();
-        }
-
-        return $token ?? $session ?? null;
-    }
-
-    public function forgetUser(): self
-    {
-        $this->setCredential();
-
-        return $this;
-    }
-
-    public function getCredential(): ?CredentialEntityContract
-    {
-        if ($this->isImpersonating()) {
-            return $this->getImposter();
-        }
-
-        $token = null;
-        $session = null;
-        $source = $this->getCredentialSource();
-
-        if (null === $source || self::SOURCE_TOKEN === $source) {
-            $token = $this->getAuthorizationGuard()->getCredential();
-        }
-
-        if (null === $source && ! $token instanceof CredentialEntityContract || self::SOURCE_SESSION === $source) {
-            $session = $this->getAuthenticationGuard()->getCredential();
-        }
-
-        return $token ?? $session ?? null;
+    /**
+     * @inheritdoc
+     */
+    public function __construct(
+        \Illuminate\Contracts\Auth\UserProvider $provider,
+        \Illuminate\Http\Request $request
+    ) {
+        $this->provider = $provider;
+        $this->request = $request;
     }
 
     /**
-     * Sets the currently authenticated user for the guard.
-     *
-     * @param null|CredentialEntityContract $credential Optional. The credential to use.
-     * @param null|int                      $source     Optional. The source context in which to assign the user. Defaults to all sources.
+     * @inheritdoc
      */
     public function login(
-        ?CredentialEntityContract $credential,
-        ?int $source = null,
-    ): GuardContract {
-        $this->stopImpersonating();
-
-        if (null === $source || self::SOURCE_TOKEN === $source) {
-            $this->getAuthorizationGuard()->login($credential);
-        }
-
-        if (null === $source || self::SOURCE_SESSION === $source) {
-            $this->getAuthenticationGuard()->login($credential);
-        }
-
-        $this->credentialSource = $source;
-
-        return $this;
-    }
-
-    public function logout(): GuardContract
-    {
-        if ($this->isImpersonating()) {
-            $this->stopImpersonating();
-
-            return $this;
-        }
-
-        $source = $this->getCredentialSource();
-
-        if (null === $source || self::SOURCE_TOKEN === $source) {
-            $this->getAuthorizationGuard()->logout();
-        }
-
-        if (null === $source || self::SOURCE_SESSION === $source) {
-            $this->getAuthenticationGuard()->logout();
-        }
-
-        return $this;
-    }
-
-    public function refreshUser(): void
-    {
-        if ($this->isImpersonating()) {
-            return;
-        }
-
-        $source = $this->getCredentialSource();
-
-        if (null === $source || self::SOURCE_TOKEN === $source) {
-            $this->getAuthorizationGuard()->refreshUser();
-        }
-
-        if (null === $source || self::SOURCE_SESSION === $source) {
-            $this->getAuthenticationGuard()->refreshUser();
-        }
-    }
-
-    public function setCredential(
-        ?CredentialEntityContract $credential = null,
-        ?int $source = null,
-    ): GuardContract {
-        $this->stopImpersonating();
-
-        if (null === $source || self::SOURCE_TOKEN === $source) {
-            $this->getAuthorizationGuard()->setCredential($credential);
-        }
-
-        if (null === $source || self::SOURCE_SESSION === $source) {
-            $this->getAuthenticationGuard()->setCredential($credential);
-        }
-
-        $this->credentialSource = $source;
-
+        \Illuminate\Contracts\Auth\Authenticatable $user
+    ): self {
+        $this->getState()->setUser($user);
         return $this;
     }
 
     /**
-     * @param CredentialEntityContract $credential
-     * @param ?int                     $source
+     * @inheritdoc
      */
-    public function setImpersonating(
-        CredentialEntityContract $credential,
-        ?int $source = null,
-    ): self {
-        $this->impersonationSource = $source;
-        $this->impersonating = $credential;
-
+    public function logout(): self
+    {
+        $this->getState()->setUser(null);
+        app('auth0')->getSdk()->clear();
         return $this;
     }
 
-    public function setUser(
-        Authenticatable $user,
-    ): void {
-        if ($this->isImpersonating()) {
-            if ($this->getImposter()?->getUser() === $user) {
-                return;
-            }
-
-            $this->stopImpersonating();
-        }
-
-        $source = $this->getCredentialSource();
-
-        if (null === $source || self::SOURCE_TOKEN === $source) {
-            $this->getAuthorizationGuard()->setUser($user);
-        }
-
-        if (null === $source || self::SOURCE_SESSION === $source) {
-            $this->getAuthenticationGuard()->setUser($user);
-        }
+    /**
+     * @inheritdoc
+     */
+    public function check(): bool
+    {
+        return $this->user() !== null;
     }
 
-    public function user(): ?Authenticatable
+    /**
+     * @inheritdoc
+     */
+    public function guest(): bool
     {
-        if ($this->isImpersonating()) {
-            return $this->getImposter()?->getUser();
+        return ! $this->check();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function user(): ?\Illuminate\Contracts\Auth\Authenticatable
+    {
+        return $this->getState()->getUser() ?? $this->getUserFromToken() ?? $this->getUserFromSession() ?? null;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function id()
+    {
+        $response = null;
+
+        if ($this->user() !== null) {
+            $id = $this->user()->getAuthIdentifier();
+
+            if (is_string($id) || is_int($id)) {
+                $response = $id;
+            }
         }
 
-        $credential = $this->getCredential();
+        return $response;
+    }
 
-        if ($credential instanceof CredentialEntityContract) {
-            return $credential->getUser();
+    /**
+     * @inheritdoc
+     *
+     * @phpcsSuppress SlevomatCodingStandard.Functions.UnusedParameter
+     */
+    public function validate(
+        array $credentials = []
+    ): bool {
+        return false;
+    }
+
+    /**
+     *  @inheritdoc
+     */
+    public function setUser(
+        \Illuminate\Contracts\Auth\Authenticatable $user
+    ): self {
+        $user = $this->getState()->setUser($user);
+        return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function hasUser(): bool
+    {
+        return ! is_null($this->getState()->getUser());
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function hasScope(
+        string $scope
+    ): bool {
+        $state = $this->getState();
+
+        if (in_array($scope, $state->getAccessTokenScope() ?? [], true)) {
+            return true;
         }
 
-        // $source = $this->getCredentialSource();
-        // $token = null;
-        // $session = null;
+        return false;
+    }
 
-        // if (null === $source || self::SOURCE_TOKEN === $source) {
-        //     $token = $this->getAuthorizationGuard()->user();
-        // }
+    /**
+     * Get the user context from a provided access token.
+     */
+    private function getUserFromToken(): ?\Illuminate\Contracts\Auth\Authenticatable
+    {
+        // Retrieve an available bearer token from the request.
+        $token = $this->request->bearerToken();
 
-        // if (null === $source || self::SOURCE_SESSION === $source) {
-        //     $session = $this->getAuthenticationGuard()->user();
-        // }
+        // If a session is not available, return null.
+        if ($token === null) {
+            return null;
+        }
 
-        // return $token ?? $session ?? null;
+        try {
+            // Attempt to decode the bearer token.
+            $decoded = app('auth0')->getSdk()->decode($token, null, null, null, null, null, null, \Auth0\SDK\Token::TYPE_TOKEN)->toArray();
+        } catch (\Auth0\SDK\Exception\InvalidTokenException $invalidToken) {
+            // Invalid bearer token.
+            return null;
+        }
+
+        // Query the UserProvider to retrieve tue user for the token.
+        $user = $this->getProvider()->getRepository()->fromAccessToken($decoded);
+
+        // Was a user retrieved successfully?
+        if ($user !== null) {
+            if (! $user instanceof \Illuminate\Contracts\Auth\Authenticatable) {
+                die('User model returned fromAccessToken must implement \Illuminate\Contracts\Auth\Authenticatable.');
+            }
+
+            if (! $user instanceof \Auth0\Laravel\Contract\Model\Stateless\User) {
+                die('User model returned fromAccessToken must implement \Auth0\Laravel\Contract\Model\Stateless\User.');
+            }
+
+            $this->getState()
+                ->clear()
+                ->setDecoded($decoded)
+                ->setAccessToken($token)
+                ->setAccessTokenScope(explode(' ', $decoded['scope'] ?? ''))
+                ->setAccessTokenExpiration($decoded['exp'] ?? null);
+        }
+
+        return $user;
+    }
+
+    /**
+     * Get the user context from an Auth0-PHP SDK session..
+     */
+    private function getUserFromSession(): ?\Illuminate\Contracts\Auth\Authenticatable
+    {
+        // Retrieve an available session from the Auth0-PHP SDK.
+        $session = app('auth0')->getSdk()->getCredentials();
+
+        // If a session is not available, return null.
+        if ($session === null) {
+            return null;
+        }
+
+        // Query the UserProvider to retrieve tue user for the session.
+        $user = $this->getProvider()->getRepository()->fromSession($session->user);
+
+        // Was a user retrieved successfully?
+        if ($user !== null) {
+            if (! $user instanceof \Illuminate\Contracts\Auth\Authenticatable) {
+                die('User model returned fromSession must implement \Illuminate\Contracts\Auth\Authenticatable.');
+            }
+
+            if (! $user instanceof \Auth0\Laravel\Contract\Model\Stateful\User) {
+                die('User model returned fromSession must implement \Auth0\Laravel\Contract\Model\Stateful\User.');
+            }
+
+            $this->getState()
+                ->clear()
+                ->setDecoded($session->user)
+                ->setIdToken($session->idToken)
+                ->setAccessToken($session->accessToken)
+                ->setAccessTokenScope($session->accessTokenScope)
+                ->setAccessTokenExpiration($session->accessTokenExpiration)
+                ->setRefreshToken($session->refreshToken);
+
+            $user = $this->handleSessionExpiration($user);
+        }
+
+        return $user;
+    }
+
+    /**
+     * Handle instances of session token expiration.
+     */
+    private function handleSessionExpiration(
+        ?\Illuminate\Contracts\Auth\Authenticatable $user
+    ): ?\Illuminate\Contracts\Auth\Authenticatable {
+        $state = $this->getState();
+
+        // Unless our token expired, we have nothing to do here.
+        if ($state->getAccessTokenExpired() !== true) {
+            return $user;
+        }
+
+        // Do we have a refresh token?
+        if ($state->getRefreshToken() !== null) {
+            try {
+                // Try to renew our token.
+                app('auth0')->getSdk()->renew();
+            } catch (\Auth0\SDK\Exception\StateException $tokenRefreshFailed) {
+                // Renew failed. Inform application.
+                event(new \Auth0\Laravel\Event\Stateful\TokenRefreshFailed());
+            }
+
+            // Retrieve updated state data
+            $refreshed = app('auth0')->getSdk()->getCredentials();
+
+            if ($refreshed !== null && $refreshed->accessTokenExpired === false) {
+                event(new \Auth0\Laravel\Event\Stateful\TokenRefreshSucceeded());
+                return $user;
+            }
+        }
+
+        // We didn't have a refresh token, or the refresh failed.
+        // Clear session.
+        $state->clear();
+        app('auth0')->getSdk()->clear();
+
+        // Inform host application.
+        event(new \Auth0\Laravel\Event\Stateful\TokenExpired());
 
         return null;
     }
 
-    private function getAuthenticationGuard(): AuthenticationGuardContract
+    /**
+     * Return the current request's StateInstance singleton.
+     */
+    private function getState(): \Auth0\Laravel\StateInstance
     {
-        $this->sdk();
-
-        return $this->authenticator ??= new AuthenticationGuard(name: $this->name, config: $this->config, sdk: $this->sdk);
+        return app()->make(\Auth0\Laravel\StateInstance::class);
     }
 
-    private function getAuthorizationGuard(): AuthorizationGuardContract
+    /**
+     * Return the current request's StateInstance singleton.
+     */
+    private function getProvider(): \Illuminate\Contracts\Auth\UserProvider
     {
-        $this->sdk();
-
-        return $this->authorizer ??= new AuthorizationGuard(name: $this->name, config: $this->config, sdk: $this->sdk);
-    }
-
-    private function getCredentialSource(): ?int
-    {
-        return $this->credentialSource;
+        return $this->provider;
     }
 }
