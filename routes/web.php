@@ -6,7 +6,18 @@ use Illuminate\Support\Facades\Route;
 Route::get('/private', function () {
   return response('Welcome! You are logged in.');
 })->middleware('auth');
-
+Route::get('/callback', function () {
+  $auth0 = \Auth0\Laravel\Auth0::instance();
+  $user = $auth0->getUser();
+  
+  \Log::debug('Auth0 Callback', [
+      'user' => $user,
+      'session' => session()->all(),
+      'auth' => auth()->check()
+  ]);
+  
+  return redirect()->intended('/');
+});
 Route::get('/scope', function () {
     return response('You have `read:messages` permission, and can therefore access this resource.');
 })->middleware('auth')->can('read:messages');

@@ -23,7 +23,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.0",
-        "auth0/login": "7.0",
+        "auth0/login": "^7.12",
         "guzzlehttp/guzzle": "^7",
         "laravel/framework": "^9",
         "laravel/sanctum": "^3",
@@ -96,6 +96,6 @@
             "wikimedia/composer-merge-plugin": true
         }
     },
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "prefer-stable": true
 }

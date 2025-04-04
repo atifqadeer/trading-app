@@ -37,8 +37,13 @@ return [
 
     'guards' => [
         'web' => [
-            'driver' => 'session',
-            'provider' => 'users',
+            'driver' => 'session',  // Keep this as 'session'
+            'provider' => 'auth0-users',  // Changed to use Auth0 provider
+        ],
+
+        'api' => [
+            'driver' => 'auth0',  // For API token authentication
+            'provider' => 'auth0-users',
         ],
     ],
 
@@ -64,11 +69,11 @@ return [
             'driver' => 'eloquent',
             'model' => App\Models\User::class,
         ],
-
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
+        
+        'auth0-users' => [
+            'driver' => 'auth0',
+            'repository' => \Auth0\Laravel\Auth\User\Repository::class,
+        ],
     ],
 
     /*

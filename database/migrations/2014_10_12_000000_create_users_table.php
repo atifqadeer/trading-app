@@ -18,7 +18,9 @@ return new class extends Migration
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
+            $table->string('auth0_id')->unique()->comment('Auth0 provider user identifier');
+            $table->string('auth0_provider')->nullable()->comment('Auth0 identity provider');
+            $table->text('auth0_metadata')->nullable()->comment('Additional Auth0 user data');
             $table->rememberToken();
             $table->timestamps();
         });

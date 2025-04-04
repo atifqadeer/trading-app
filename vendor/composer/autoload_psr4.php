@@ -48,7 +48,6 @@ return array(
     'Spatie\\Ray\\' => array($vendorDir . '/spatie/ray/src'),
     'Spatie\\Macroable\\' => array($vendorDir . '/spatie/macroable/src'),
     'Spatie\\LaravelRay\\' => array($vendorDir . '/spatie/laravel-ray/src'),
-    'Spatie\\LaravelPackageTools\\' => array($vendorDir . '/spatie/laravel-package-tools/src'),
     'Spatie\\LaravelIgnition\\' => array($vendorDir . '/spatie/laravel-ignition/src'),
     'Spatie\\Ignition\\' => array($vendorDir . '/spatie/ignition/src'),
     'Spatie\\FlareClient\\' => array($vendorDir . '/spatie/flare-client-php/src'),
@@ -107,6 +106,6 @@ return array(
     'Carbon\\' => array($vendorDir . '/nesbot/carbon/src/Carbon'),
     'Brick\\Math\\' => array($vendorDir . '/brick/math/src'),
     'Auth0\\SDK\\' => array($vendorDir . '/auth0/auth0-php/src'),
-    'Auth0\\Laravel\\' => array($vendorDir . '/auth0/login/src'),
+    'Auth0\\Laravel\\' => array($vendorDir . '/auth0/login/src', $vendorDir . '/auth0/login/deprecated'),
     'App\\' => array($baseDir . '/app', $vendorDir . '/laravel/pint/app'),
 );
